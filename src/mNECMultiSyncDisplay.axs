@@ -1,6 +1,6 @@
 MODULE_NAME='mNECMultiSyncDisplay'      (
                                             dev vdvObject,
-                                            dev vdvControl
+                                            dev vdvCommObject
                                         )
 
 (***********************************************************)
@@ -142,8 +142,8 @@ DEFINE_MUTUALLY_EXCLUSIVE
 (* EXAMPLE: DEFINE_FUNCTION <RETURN_TYPE> <NAME> (<PARAMETERS>) *)
 (* EXAMPLE: DEFINE_CALL '<NAME>' (<PARAMETERS>) *)
 define_function SendCommand(char cParam[]) {
-    NAVLog("'Command to ',NAVStringSurroundWith(NAVDeviceToString(vdvControl), '[', ']'),': [',cParam,']'")
-    send_command vdvControl,"cParam"
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'Command to ',NAVStringSurroundWith(NAVDeviceToString(vdvCommObject), '[', ']'),': [',cParam,']'")
+    send_command vdvCommObject,"cParam"
 }
 
 define_function BuildCommand(char cHeader[], char cCmd[]) {
@@ -157,7 +157,7 @@ define_function BuildCommand(char cHeader[], char cCmd[]) {
 define_function Register() {
     iRegistered = true
     if (iID) { BuildCommand('REGISTER','') }
-    NAVLog("'NEC_REGISTER<',itoa(iID),'>'")
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'NEC_REGISTER<',itoa(iID),'>'")
 }
 
 define_function Process() {
@@ -166,13 +166,13 @@ define_function Process() {
     while (length_array(cRxBuffer) && NAVContains(cRxBuffer,'>')) {
     cTemp = remove_string(cRxBuffer,"'>'",1)
     if (length_array(cTemp)) {
-        NAVLog("'Parsing String From ',NAVStringSurroundWith(NAVDeviceToString(vdvControl), '[', ']'),': [',cTemp,']'")
+        NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'Parsing String From ',NAVStringSurroundWith(NAVDeviceToString(vdvCommObject), '[', ']'),': [',cTemp,']'")
         if (NAVContains(cRxBuffer, cTemp)) { cRxBuffer = "''" }
         select {
         active (NAVStartsWith(cTemp,'REGISTER')): {
             iID = atoi(NAVGetStringBetween(cTemp,'<','>'))
             //if (iID) { BuildCommand('REGISTER','') }
-            NAVLog("'NEC_REGISTER_REQUESTED<',itoa(iID),'>'")
+            NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'NEC_REGISTER_REQUESTED<',itoa(iID),'>'")
 
             iRegisterRequested = true
             if (iRegisterReady) {
@@ -188,17 +188,17 @@ define_function Process() {
            // }else {
             module.Device.IsInitialized = false
             GetInitialized()
-            NAVLog("'NEC_INIT_REQUESTED<',itoa(iID),'>'")
+            NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'NEC_INIT_REQUESTED<',itoa(iID),'>'")
 
             //}
         }
         active (NAVStartsWith(cTemp,'START_POLLING')): {
-            timeline_create(TL_DRIVE,ltDrive,length_array(ltDrive),TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
+            NAVTimelineStart(TL_DRIVE,ltDrive,TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
         }
         active (NAVStartsWith(cTemp,'RESPONSE_MSG')): {
             stack_var char cResponseRequestMess[NAV_MAX_BUFFER]
             stack_var char cResponseMess[NAV_MAX_BUFFER]
-            //NAVLog("'RESPONCE_MSG_RECEIVED<',itoa(iID),'>: ',cTemp")
+            //NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'RESPONCE_MSG_RECEIVED<',itoa(iID),'>: ',cTemp")
             TimeOut()
             cResponseRequestMess = NAVGetStringBetween(cTemp,'<','|')
             cResponseMess = NAVGetStringBetween(cTemp,'|','>')
@@ -236,9 +236,9 @@ define_function Process() {
                 if (!module.Device.IsInitialized) {
                 module.Device.IsInitialized = true
                 BuildCommand('INIT_DONE','')
-                //NAVLog("'INIT_DONE<',itoa(iID),'>'")
-                NAVLog("'NEC_INIT_DONE<',itoa(iID),'>'")
-                //timeline_create(TL_DRIVE,ltDrive,length_array(ltDrive),TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
+                //NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'INIT_DONE<',itoa(iID),'>'")
+                NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'NEC_INIT_DONE<',itoa(iID),'>'")
+                //NAVTimelineStart(TL_DRIVE,ltDrive,TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
                 }
 
                 iPollSequence = GET_POWER
@@ -257,7 +257,7 @@ define_function Process() {
                 stack_var sinteger siTemp
                 remove_string(cResponseMess,'6200006400',1)
                 siTemp = hextoi(cResponseMess)
-                if (siTemp <> uDisplay.Volume.Level.Actual) {
+                if (siTemp != uDisplay.Volume.Level.Actual) {
                 uDisplay.Volume.Level.Actual = siTemp
                 send_level vdvObject,1,NAVScaleValue(uDisplay.Volume.Level.Actual,100,255,0)
                 }
@@ -265,9 +265,9 @@ define_function Process() {
                 if (!module.Device.IsInitialized) {
                 module.Device.IsInitialized = true
                 BuildCommand('INIT_DONE','')
-                //NAVLog("'INIT_DONE<',itoa(iID),'>'")
-                NAVLog("'NEC_INIT_DONE<',itoa(iID),'>'")
-                //timeline_create(TL_DRIVE,ltDrive,length_array(ltDrive),TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
+                //NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'INIT_DONE<',itoa(iID),'>'")
+                NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'NEC_INIT_DONE<',itoa(iID),'>'")
+                //NAVTimelineStart(TL_DRIVE,ltDrive,TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
                 }
 
                 iPollSequence = GET_POWER
@@ -355,7 +355,7 @@ define_function Drive() {
         if (uDisplay.Volume.Mute.Required && (uDisplay.Volume.Mute.Required == uDisplay.Volume.Mute.Actual)) { uDisplay.Volume.Mute.Required = 0; return }
         if (uDisplay.Volume.Level.Required >= 0 && (uDisplay.Volume.Level.Required == uDisplay.Volume.Level.Actual)) { uDisplay.Volume.Level.Required = -1; return }
 
-        if (uDisplay.Volume.Mute.Required && (uDisplay.Volume.Mute.Required <> uDisplay.Volume.Mute.Actual) && (uDisplay.PowerState.Actual == ACTUAL_POWER_ON) && module.Device.IsCommunicating) {
+        if (uDisplay.Volume.Mute.Required && (uDisplay.Volume.Mute.Required != uDisplay.Volume.Mute.Actual) && (uDisplay.PowerState.Actual == ACTUAL_POWER_ON) && module.Device.IsCommunicating) {
         SetMute(uDisplay.Volume.Mute.Required)
         iCommandLockOut = true
         wait 20 iCommandLockOut = false
@@ -363,7 +363,7 @@ define_function Drive() {
         return
         }
 
-        if (uDisplay.PowerState.Required && (uDisplay.PowerState.Required <> uDisplay.PowerState.Actual) && module.Device.IsCommunicating) {
+        if (uDisplay.PowerState.Required && (uDisplay.PowerState.Required != uDisplay.PowerState.Actual) && module.Device.IsCommunicating) {
         SetPower(uDisplay.PowerState.Required)
         iCommandLockOut = true
         wait 80 iCommandLockOut = false
@@ -372,7 +372,7 @@ define_function Drive() {
         return
         }
 
-        if (uDisplay.Input.Required && (uDisplay.Input.Required  <> uDisplay.Input.Actual) && (uDisplay.PowerState.Actual == ACTUAL_POWER_ON) && module.Device.IsCommunicating) {
+        if (uDisplay.Input.Required && (uDisplay.Input.Required  != uDisplay.Input.Actual) && (uDisplay.PowerState.Actual == ACTUAL_POWER_ON) && module.Device.IsCommunicating) {
         SetInput(uDisplay.Input.Required)
         iCommandLockOut = true
         wait 20 iCommandLockOut = false
@@ -384,7 +384,7 @@ define_function Drive() {
         if ([vdvObject,VOL_UP] && uDisplay.PowerState.Actual == ACTUAL_POWER_ON) { uDisplay.Volume.Level.Required++ }
         if ([vdvObject,VOL_DN] && uDisplay.PowerState.Actual == ACTUAL_POWER_ON) { uDisplay.Volume.Level.Required-- }
 
-        if (uDisplay.Volume.Level.Required && (uDisplay.Volume.Level.Required <> uDisplay.Volume.Level.Actual) && (uDisplay.PowerState.Actual == ACTUAL_POWER_ON) && module.Device.IsCommunicating) {
+        if (uDisplay.Volume.Level.Required && (uDisplay.Volume.Level.Required != uDisplay.Volume.Level.Actual) && (uDisplay.PowerState.Actual == ACTUAL_POWER_ON) && module.Device.IsCommunicating) {
         SetVolume(uDisplay.Volume.Level.Required)
         iCommandLockOut = true
         wait 5 iCommandLockOut = false
@@ -406,7 +406,7 @@ define_function Drive() {
 (*                STARTUP CODE GOES BELOW                  *)
 (***********************************************************)
 DEFINE_START {
-    create_buffer vdvControl,cRxBuffer
+    create_buffer vdvCommObject,cRxBuffer
     uDisplay.Volume.Level.Required = -1
     uDisplay.Volume.Level.Actual = -1
 }
@@ -414,9 +414,9 @@ DEFINE_START {
 (*                THE EVENTS GO BELOW                      *)
 (***********************************************************)
 DEFINE_EVENT
-data_event[vdvControl] {
+data_event[vdvCommObject] {
     string: {
-    //NAVLog("'NEC_STRING_COMM_MODULE<',data.text,'>'")
+    //NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'NEC_STRING_COMM_MODULE<',data.text,'>'")
     if (!iSemaphore) {
         Process()
     }
@@ -432,7 +432,7 @@ data_event[vdvObject] {
     command: {
         stack_var char cCmdHeader[NAV_MAX_CHARS]
     stack_var char cCmdParam[2][NAV_MAX_CHARS]
-    NAVLog("'Command from ',NAVStringSurroundWith(NAVDeviceToString(data.device), '[', ']'),': [',data.text,']'")
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'Command from ',NAVStringSurroundWith(NAVDeviceToString(data.device), '[', ']'),': [',data.text,']'")
     cCmdHeader = DuetParseCmdHeader(data.text)
     cCmdParam[1] = DuetParseCmdParam(data.text)
     cCmdParam[2] = DuetParseCmdParam(data.text)

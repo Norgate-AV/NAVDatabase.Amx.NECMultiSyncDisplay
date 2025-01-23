@@ -128,7 +128,7 @@ DEFINE_MUTUALLY_EXCLUSIVE
 (* EXAMPLE: DEFINE_FUNCTION <RETURN_TYPE> <NAME> (<PARAMETERS>) *)
 (* EXAMPLE: DEFINE_CALL '<NAME>' (<PARAMETERS>) *)
 define_function SendStringRaw(char cString[]) {
-    NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_TO, dvPort, cString))
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_TO, dvPort, cString))
     send_string dvPort,"cString"
 }
 
@@ -143,13 +143,13 @@ define_function AddToQueue(char cString[], integer iPriority) {
     case true: {    //Commands have priority over status requests
         select {
         active (uQueue.iCommandHead == max_length_array(cCommandQueue)): {
-            if (uQueue.iCommandTail <> 1) {
+            if (uQueue.iCommandTail != 1) {
             uQueue.iCommandHead = 1
             cCommandQueue[uQueue.iCommandHead] = cString
             uQueue.iHasItems = true
             }
         }
-        active (uQueue.iCommandTail <> (uQueue.iCommandHead + 1)): {
+        active (uQueue.iCommandTail != (uQueue.iCommandHead + 1)): {
             uQueue.iCommandHead++
             cCommandQueue[uQueue.iCommandHead] = cString
             uQueue.iHasItems = true
@@ -159,13 +159,13 @@ define_function AddToQueue(char cString[], integer iPriority) {
     case false: {
         select {
         active (uQueue.iStatusHead == max_length_array(cStatusQueue)): {
-            if (uQueue.iStatusTail <> 1) {
+            if (uQueue.iStatusTail != 1) {
             uQueue.iStatusHead = 1
             cStatusQueue[uQueue.iStatusHead] = cString
             uQueue.iHasItems = true
             }
         }
-        active (uQueue.iStatusTail <> (uQueue.iStatusHead + 1)): {
+        active (uQueue.iStatusTail != (uQueue.iStatusHead + 1)): {
             uQueue.iStatusHead++
             cStatusQueue[uQueue.iStatusHead] = cString
             uQueue.iHasItems = true
@@ -181,7 +181,7 @@ define_function char[NAV_MAX_BUFFER] RemoveFromQueue() {
     if (uQueue.iHasItems && !uQueue.iBusy) {
     uQueue.iBusy = true
     select {
-        active (uQueue.iCommandHead <> uQueue.iCommandTail): {
+        active (uQueue.iCommandHead != uQueue.iCommandTail): {
         if (uQueue.iCommandTail == max_length_array(cCommandQueue)) {
             uQueue.iCommandTail = 1
         }else {
@@ -190,7 +190,7 @@ define_function char[NAV_MAX_BUFFER] RemoveFromQueue() {
 
         uQueue.cLastMess = cCommandQueue[uQueue.iCommandTail]
         }
-        active (uQueue.iStatusHead <> uQueue.iStatusTail): {
+        active (uQueue.iStatusHead != uQueue.iStatusTail): {
         if (uQueue.iStatusTail == max_length_array(cStatusQueue)) {
             uQueue.iStatusTail = 1
         }else {
@@ -262,7 +262,7 @@ define_function SendNextQueueItem() {
 
     if (length_array(cTemp)) {
     SendString(cTemp)
-    timeline_create(TL_QUEUE_FAILED_RESPONSE,ltQueueFailedResponse,length_array(ltQueueFailedResponse),TIMELINE_ABSOLUTE,TIMELINE_ONCE)
+    NAVTimelineStart(TL_QUEUE_FAILED_RESPONSE,ltQueueFailedResponse,TIMELINE_ABSOLUTE,TIMELINE_ONCE)
     }
 }
 
@@ -313,7 +313,7 @@ define_function Process() {
     cTemp = remove_string(cRxBuffer,"NAV_CR",1)
     if (length_array(cTemp)) {
         stack_var integer iResponseMessID
-        NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_PARSING_STRING_FROM, dvPort, cTemp))
+        NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_PARSING_STRING_FROM, dvPort, cTemp))
         cTemp = NAVStripCharsFromRight(cTemp, 3)    //Removes ETX,CHK,CR
         select {
         active (NAVContains(uQueue.cLastMess,'HEARTBEAT')): {
@@ -328,7 +328,7 @@ define_function Process() {
             iResponseMessID = GetMessID(uQueue.cLastMess)
             if (iResponseMessID && (iResponseMessID <= length_array(vdvCommObjects))) {
             send_string vdvCommObjects[iResponseMessID],"'RESPONSE_MSG<',GetMess(uQueue.cLastMess),'|',cTemp,'>'"
-            NAVLog("'NEC_SENDING_RESPONSE_MSG<',cTemp,'|',itoa(iResponseMessID),'>'")
+            NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'NEC_SENDING_RESPONSE_MSG<',cTemp,'|',itoa(iResponseMessID),'>'")
             }
         }
         }
@@ -360,7 +360,7 @@ DEFINE_EVENT
 
 data_event[dvPort] {
     online: {
-    if (data.device.number <> 0) {
+    if (data.device.number != 0) {
         send_command data.device,"'SET MODE DATA'"
         send_command data.device,"'SET BAUD 9600,N,8,1 485 DISABLE'"
         send_command data.device,"'B9MOFF'"
@@ -369,12 +369,12 @@ data_event[dvPort] {
         send_command data.device,"'HSOFF'"
     }
 
-    timeline_create(TL_HEARTBEAT,ltHeartbeat,length_array(ltHeartbeat),TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
+    NAVTimelineStart(TL_HEARTBEAT,ltHeartbeat,TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
 
     if (data.device.number == 0) { iIPConnected = true }
     }
     string: {
-    NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_TO, data.device, data.text))
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_TO, data.device, data.text))
     select {
         active (NAVStartsWith(cRxBuffer,"$FF")): {
         stack_var char cTemp[3]
@@ -408,7 +408,7 @@ data_event[vdvObject] {
     command: {
         stack_var char cCmdHeader[NAV_MAX_CHARS]
     stack_var char cCmdParam[2][NAV_MAX_CHARS]
-    NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
     cCmdHeader = DuetParseCmdHeader(data.text)
     cCmdParam[1] = DuetParseCmdParam(data.text)
     cCmdParam[2] = DuetParseCmdParam(data.text)
@@ -417,13 +417,13 @@ data_event[vdvObject] {
         switch (cCmdParam[1]) {
             case 'IP_ADDRESS': {
             cIPAddress = cCmdParam[2]
-            timeline_create(TL_IP_CHECK,ltIPCheck,length_array(ltIPCheck),timeline_absolute,timeline_repeat)
+            NAVTimelineStart(TL_IP_CHECK,ltIPCheck,timeline_absolute,timeline_repeat)
             }
         }
         }
         case 'INIT': {
         //if (data
-        //timeline_create(TL_HEARTBEAT,ltHeartbeat,length_array(ltHeartbeat),TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
+        //NAVTimelineStart(TL_HEARTBEAT,ltHeartbeat,TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
         }
     }
     }
@@ -432,12 +432,12 @@ data_event[vdvObject] {
 data_event[vdvCommObjects] {
     online: {
     send_string data.device,"'REGISTER<',itoa(get_last(vdvCommObjects)),'>'"
-    NAVLog("'NEC_REGISTER_SENT<',itoa(get_last(vdvCommObjects)),'>'")
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'NEC_REGISTER_SENT<',itoa(get_last(vdvCommObjects)),'>'")
     }
     command: {
     stack_var char cCmdHeader[NAV_MAX_CHARS]
     stack_var integer iResponseObjectMessID
-    NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
     cCmdHeader = DuetParseCmdHeader(data.text)
     switch (cCmdHeader) {
         case 'COMMAND_MSG': { AddToQueue("cCmdHeader,data.text",true) }
@@ -454,13 +454,13 @@ data_event[vdvCommObjects] {
         InitializeObjects()
         if (get_last(vdvCommObjects) == length_array(vdvCommObjects)) {
             send_string vdvObject,"'INIT_DONE'"
-            send_string vdvCommObjects,"'START_POLLING<>'"
+            send_string vdvCommObjects,"'START_POLLING!='"
         }
         }
         case 'REGISTER': {
         iResponseObjectMessID = atoi(NAVGetStringBetween(data.text,'<','>'))
         uObject[get_last(vdvCommObjects)].iRegistered = true
-        NAVLog("'NEC_REGISTERED<',itoa(iResponseObjectMessID),'>'")
+        NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'NEC_REGISTERED<',itoa(iResponseObjectMessID),'>'")
         }
     }
     }
